@@ -2,6 +2,7 @@ import jax
 from jax.experimental import pallas as pl
 import jax.numpy as jnp
 from functools import partial
+import fire
 
 
 def matmul_kernel(x_ref, y_ref, acc_ref, z_ref, *, n_steps):
@@ -44,8 +45,8 @@ def matmul(
     )(x, y, acc)
 
 
-if __name__ == "__main__":
-    m = k = n = 128 * 20
+def main(matrix_size: int, block_size: int = 128):
+    m = k = n = matrix_size
     k1, k2 = jax.random.split(jax.random.key(0), 2)
     # use float16 instead of bfloat16 since the GPU is a GTX 3090
     x = jax.random.normal(k1, (m, k), dtype=jnp.float16)
@@ -54,8 +55,10 @@ if __name__ == "__main__":
     # y = jax.random.normal(k2, (k, n), dtype=jnp.float32)
     # x = jnp.ones((m, k), dtype=jnp.bfloat16)
     # y = jnp.ones((k, n), dtype=jnp.bfloat16)
-    result = matmul(x, y)
-    expected = jnp.dot(x, y)
+    result = matmul(
+        x, y, bm=block_size, bn=block_size, bk=block_size
+    ).block_until_ready()
+    expected = jnp.dot(x, y).block_until_ready()
     print(result)
     print(expected)
     print(result.dtype, expected.dtype)
@@ -63,4 +66,7 @@ if __name__ == "__main__":
         "All close?",
         jnp.allclose(expected, result, atol=1e-2, rtol=0),
     )
-    print("Success!")
+
+
+if __name__ == "__main__":
+    fire.Fire(main)
