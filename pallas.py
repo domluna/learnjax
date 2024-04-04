@@ -51,7 +51,7 @@ def main(matrix_size: int, block_size: int = 128):
     # use float16 instead of bfloat16 since the GPU is a GTX 3090
     x = jax.random.normal(k1, (m, k), dtype=jnp.float16)
     y = jax.random.normal(k2, (k, n), dtype=jnp.float16)
-    # x = jax.random.normal(k1, (m, k), dtype=np.float32)
+    # x = jax.random.normal(k1, (m, k), dtype=jnp.float32)
     # y = jax.random.normal(k2, (k, n), dtype=jnp.float32)
     # x = jnp.ones((m, k), dtype=jnp.bfloat16)
     # y = jnp.ones((k, n), dtype=jnp.bfloat16)
