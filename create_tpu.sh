@@ -15,7 +15,7 @@ gcloud compute tpus tpu-vm create ${TPU_NAME} \
 --accelerator-type=v5litepod-1 \
 --version=v2-alpha-tpuv5-lite \
 --preemptible \
---spot 
+--spot
 
 # gets and error because you need to contact Google for v5 use
 
