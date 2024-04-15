@@ -1,9 +1,13 @@
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.quantization import quantize_embeddings
-import usearch
 from usearch.index import Index, Matches, MetricKind
-import pathlib
 import numpy as np
+import time
+import logging
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 data = [
     """
@@ -64,7 +68,6 @@ embeds = model.encode(
 
 # decrease to 512
 binary_embeds = quantize_embeddings(embeds, "binary")
-int8_embeds = quantize_embeddings(embeds, "int8")
 
 binary_index = Index(
     ndim=64,
@@ -74,6 +77,7 @@ binary_index = Index(
 binary_index.add(key_ids, binary_embeds)
 binary_index.save("binary_index.usearch")
 
+int8_embeds = quantize_embeddings(embeds, "int8")
 int8_index = Index(
     ndim=512,
     # the metric here doesn't matter since we're just using this as a disk store.
@@ -87,18 +91,53 @@ int8_view = Index.restore("int8_index.usearch", view=True)
 
 
 def search(query: str, top_k: int = 3):
-    # float32 precision
+    start_time = time.time()
+
+    # Encode the query
+    encode_start = time.time()
     e = model.encode(query)[..., :512]
+    encode_end = time.time()
+    logging.info(f"Encoding time: {encode_end - encode_start:.4f} seconds")
+
+    # Quantize embeddings
+    quantize_start = time.time()
     be = quantize_embeddings(e.reshape(1, -1), "binary")
+    quantize_end = time.time()
+    logging.info(f"Quantization time: {quantize_end - quantize_start:.4f} seconds")
+
+    # Search in binary index
+    search_start = time.time()
     binary_matches: Matches = binary_index.search(be, top_k)
+    search_end = time.time()
+    logging.info(f"Binary index search time: {search_end - search_start:.4f} seconds")
+
+    # Retrieve embeddings from int8 index
+    retrieve_start = time.time()
     embeds = int8_view[binary_matches.keys].astype(np.float32)
+    retrieve_end = time.time()
+    logging.info(
+        f"Embedding retrieval time: {retrieve_end - retrieve_start:.4f} seconds"
+    )
+
+    # Compute final scores
+    score_start = time.time()
     scores = e @ embeds.T
     inds = np.argsort(-scores)[:top_k]
     top_k_indices = binary_matches.keys[inds]
     top_k_scores = scores[inds]
+    score_end = time.time()
+    logging.info(f"Scoring time: {score_end - score_start:.4f} seconds")
+
+    total_time = time.time() - start_time
+    logging.info(f"Total search time: {total_time:.4f} seconds")
+
     print(f"top k scores {top_k_scores}")
     print(f"top k indices {top_k_indices}")
-    return [data[i] for i in top_k_indices]
+    return {
+        "data": [data[i] for i in top_k_indices],
+        "scores": top_k_scores,
+        "indices": top_k_indices,
+    }
 
 
 search("what are cats sleeping habits", top_k=3)
